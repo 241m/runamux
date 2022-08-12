@@ -7,10 +7,12 @@
 #  a simple tmux session runner
 #
 
-# Get script install prefix, assuming script is ${PREFIX}/bin/runamux
-_pref=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+set -u
 
-readonly _pref
+# Get script install prefix, assuming script is ${PREFIX}/bin/runamux
+prefix=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+readonly prefix
 
 #
 # Log message to stderr
@@ -65,16 +67,16 @@ has-session() {
 # Check if last created session has window named '$1'
 #
 has-window() {
-  [ -z "$_session" ] && return 1
-  tmux list-windows -F '#W' -t "$_session" | grep -sq "^$1$"
+  [ -z "$session" ] && return 1
+  tmux list-windows -F '#W' -t "$session" | grep -sq "^$1$"
 }
 
 #
 # Start a new detached session
 #
 session() {
-  _session=$1
-  _window=
+  session=$1
+  window=
 
   if has-session "$1"; then
     return
@@ -83,18 +85,18 @@ session() {
   m "Create session '$1'"
 
   t new-session -dn "${1}_placeholder" -s "$1" pause
-  t set-environment -ht "=$1" RUNAMUX_PREFIX "$_pref"
+  t set-environment -t "=$1" RUNAMUX_PREFIX "$prefix"
 }
 
 #
 # Add a new window in last created session.
 #
 window() {
-  if [ -z "$_session" ]; then
+  if [ -z "$session" ]; then
     return 1
   fi
 
-  _window=$1
+  window=$1
 
   if has-window "$1"; then
     return
@@ -102,19 +104,19 @@ window() {
 
   m "Create window '$1'"
 
-  _pane=$(e new-window -Pdn "$1" -t "=$_session:" -F '#D' pause)
+  pane=$(e new-window -Pdn "$1" -t "=$session:" -F '#D' pause)
 
-  local _ph_name="${_session}_placeholder"
-  local _ph_target="=$_session:=$_ph_name"
+  local ph_name="${session}_placeholder"
+  local ph_target="=$session:=$ph_name"
 
   # close placeholder window
-  if has-window "$_ph_name"; then
-    local _ph_pid
+  if has-window "$ph_name"; then
+    local ph_pid
 
     # close by killing subprocess (kill-window doesn't do this)
-    if _ph_pid=$(pane-pid "$_ph_target"); then
-      m "Close placeholder window for '$_session' (PID=$_ph_pid)"
-      kill -SIGINT "$_ph_pid"
+    if ph_pid=$(pane-pid "$ph_target"); then
+      m "Close placeholder window for '$session' (PID=$ph_pid)"
+      kill -SIGINT "$ph_pid"
     fi
   fi
 }
@@ -123,27 +125,27 @@ window() {
 # Create new pane (horizontal split)
 #
 pane() {
-  if [ -z "$_session" ] || [ -z "$_window" ]; then
+  if [ -z "$session" ] || [ -z "$window" ]; then
     return 1
   fi
 
-  local _ppid _newp
+  local ppid newp
 
   m "Create pane '$*'"
 
-  if _newp=$(e split-window -Pht "=$_session:=$_window" -F '#D' "$@"); then
-    t set-option -pt "$_newp" remain-on-exit on
-    t set-hook -pt "$_newp" pane-died \
-      "run -b $_pref/libexec/runamux/notify-died"
-    t set-hook -pt "$_newp" alert-bell \
-      "run -b $_pref/libexec/runamux/notify-bell"
+  if newp=$(e split-window -Pht "=$session:=$window" -F '#D' "$@"); then
+    t set-option -pt "$newp" remain-on-exit on
+    t set-hook -pt "$newp" pane-died \
+      "run -b $prefix/libexec/runamux/notify-died"
+    t set-hook -pt "$newp" alert-bell \
+      "run -b $prefix/libexec/runamux/notify-bell"
   fi
 
   # close placeholder pane
-  if [ "$_pane" ]; then
-    if _ppid=$(pane-pid "$_pane"); then
-      m "Close placeholder pane '$_pane' (PID=$_ppid)"
-      kill -SIGINT "$_ppid"
+  if [ "$pane" ]; then
+    if ppid=$(pane-pid "$pane"); then
+      m "Close placeholder pane '$pane' (PID=$ppid)"
+      kill -SIGINT "$ppid"
     fi
   fi
 
@@ -207,7 +209,7 @@ esac
 
 # some sanity checks
 for f in runamux/notify-died runamux/notify-bell; do
-  if [ ! -f "$_pref/libexec/$f" ]; then
+  if [ ! -f "$prefix/libexec/$f" ]; then
     echo "Required libexec script not found: $f"
     exit 1
   fi
