@@ -83,7 +83,7 @@ session() {
   m "Create session '$1'"
 
   t new-session -dn "${1}_placeholder" -s "$1" pause
-  t set-environment -ht "=$1" RUNAMUX_PREFIX "$RUNAMUX_PREFIX"
+  t set-environment -ht "=$1" RUNAMUX_PREFIX "$_pref"
 }
 
 #
