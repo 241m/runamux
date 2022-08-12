@@ -57,6 +57,17 @@ pane-pid() {
 }
 
 #
+# Kill pane (kills child process, not just the pane)
+#
+kill-pane() {
+  local pid
+  if pid=$(pane-pid "$1") && (( pid )); then
+    m "Kill child process (PID=$pid)"
+    kill -SIGINT "$pid"
+  fi
+}
+
+#
 # Check if current server has session named '$1'
 #
 has-session() {
@@ -89,7 +100,7 @@ session() {
 }
 
 #
-# Add a new window in last created session.
+# Add a new window in last created session
 #
 window() {
   if [ -z "$session" ]; then
@@ -107,17 +118,11 @@ window() {
   pane=$(e new-window -Pdn "$1" -t "=$session:" -F '#D' pause)
 
   local ph_name="${session}_placeholder"
-  local ph_target="=$session:=$ph_name"
 
   # close placeholder window
   if has-window "$ph_name"; then
-    local ph_pid
-
-    # close by killing subprocess (kill-window doesn't do this)
-    if ph_pid=$(pane-pid "$ph_target"); then
-      m "Close placeholder window for '$session' (PID=$ph_pid)"
-      kill -SIGINT "$ph_pid"
-    fi
+    m "Close placeholder window for '$session'"
+    kill-pane "=$session:=$ph_name"
   fi
 }
 
@@ -129,7 +134,7 @@ pane() {
     return 1
   fi
 
-  local ppid newp
+  local newp
 
   m "Create pane '$*'"
 
@@ -143,10 +148,8 @@ pane() {
 
   # close placeholder pane
   if [ "$pane" ]; then
-    if ppid=$(pane-pid "$pane"); then
-      m "Close placeholder pane '$pane' (PID=$ppid)"
-      kill -SIGINT "$ppid"
-    fi
+    m "Close placeholder pane '$pane'"
+    kill-pane "$pane"
   fi
 
   unset _pane
