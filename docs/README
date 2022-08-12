@@ -1,4 +1,4 @@
-RUNAMUX(1)			 User Commands			    RUNAMUX(1)
+RUNAMUX(1)	       User Commands		RUNAMUX(1)
 
 NAME
   runamux - manual page for runamux 0.1.0
@@ -10,17 +10,18 @@ DESCRIPTION
   Start a tmux session defined in the file CONFIG.
 
 OPTIONS
-  Argument CONFIG can be a path to a file as-is, the base name of a .conf file
-  (i.e. 'test' => 'test.conf'), or a CONFIG.conf file in the runamux config
-  directory, first file found in that order is used.
+  Argument CONFIG can be a path to a file as-is, the base
+  name of a .conf file, or a CONFIG.conf file in the
+  runamux config directory, first file found in that order
+  is used.
 
   Runamux config directory is $XDG_CONFIG_HOME/runamux.
 
-  The config file must be a Bash script. These functions are available to
-  start sessions, windows and panes:
+  The config file must be a Bash script. These functions
+  are available to start sessions, windows and panes:
 
   session NAME
-    Start new session, named NAME.
+    Start new detached session, named NAME.
 
   window NAME
     Add new window to last created session.
@@ -38,4 +39,4 @@ AUTHOR
 REPORTING BUGS
   Report bugs at https://github.com/241m/runamux
 
-runamux 0.1.0			  August 2022			    RUNAMUX(1)
+runamux 0.1.0		August 2022		RUNAMUX(1)

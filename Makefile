@@ -7,7 +7,7 @@ LIBPREFIX ?= $(PREFIX)/libexec
 DOCPREFIX ?= $(PREFIX)/share/doc
 MANPREFIX ?= $(PREFIX)/share/man
 
-MANDOC_OPTS ?= -O indent=2
+MANDOC_OPTS ?= -O indent=2,width=58
 
 all:
 
