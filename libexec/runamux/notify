@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ -z "$TMUX" ]; then
+  echo "Must be run in tmux." >&2
+  exit 1
+fi
+
+if ! command -v notify-send &>/dev/null; then
+  echo "System must have libnotify installed." >&2
+  exit 127
+fi
+
+if pane_cmd=$(tmux display -p '#{pane_start_command}'); then
+  notify-send "runamux pane $1" "$pane_cmd"
+fi

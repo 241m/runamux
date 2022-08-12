@@ -1,0 +1,175 @@
+#!/bin/bash
+
+#
+# █▀▄ █ █ █▄ █ ▄▀▄ █▄ ▄█ █ █ ▀▄▀
+# █▀▄ ▀▄█ █ ▀█ █▀█ █ ▀ █ ▀▄█ █ █
+#
+#  a simple tmux session runner
+#
+
+# get script install prefix
+# this assumes script is PREFIX/bin/runamux
+_pref=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+readonly _pref
+
+#
+# tmux shortcut
+#
+t() {
+  tmux "$@"
+}
+
+#
+# tmux: silent all output
+#
+s() {
+  t "$@" &>/dev/null
+}
+
+#
+# tmux: silent stderr only
+#
+e() {
+  t "$@" 2>/dev/null
+}
+
+#
+# has-session: check if current server has session named '$1'
+#
+has-session() {
+  s has-session -t "$1"
+}
+
+#
+# has-window: check if last created session has window named '$1'
+#
+has-window() {
+  [ -z "$_session" ] && return 1
+  tmux list-windows -F '#W' -t "$_session" | grep -sq "^$1$"
+}
+
+#
+# Start a new session
+#
+session() {
+  _session=$1
+  _window=
+
+  if has-session "$1"; then
+    return
+  fi
+
+  t new-session -dn "${1}_placeholder" -s "$1" pause
+  t set-environment -ht "=$1" RUNAMUX_PREFIX "$RUNAMUX_PREFIX"
+}
+
+#
+# Add a new window in last created session.
+#
+window() {
+  if [ -z "$_session" ]; then
+    return 1
+  fi
+
+  _window=$1
+
+  if has-window "$1"; then
+    return
+  fi
+
+  _pane=$(e new-window -Pdn "$1" -t "=$_session:" -F '#D' pause)
+
+  s kill-window -t "=$_session:*_placeholder"
+  t set-option -wt "$_pane" remain-on-exit on
+  t set-option -wt "$_pane" pane-border-status top
+  t set-hook -wt "$_pane" pane-died "run -b $_pref/libexec/runamux/notify-died"
+  t set-hook -wt "$_pane" alert-bell "run -b $_pref/libexec/runamux/notify-bell"
+}
+
+#
+# Create new pane (horizontal split)
+#
+pane() {
+  if [ -z "$_session" ] || [ -z "$_window" ]; then
+    return 1
+  fi
+
+  if [ "$_pane" ]; then
+    t respawn-pane -kt "$_pane" "$*"
+    unset _pane
+  else
+    t split-window -ht "=$_session:=$_window" "$*"
+  fi
+}
+
+#
+# Print usage
+#
+usage() {
+  echo "Usage: $0 CONFIG
+Start a tmux session defined in the file CONFIG.
+
+Options:
+
+Argument CONFIG can be a path to a file as-is, the base
+name of a .conf file, or a CONFIG.conf file in the
+runamux config directory, first file found in that order
+is used.
+
+Runamux config directory is \$XDG_CONFIG_HOME/runamux.
+
+The config file must be a Bash script. These functions are
+available to start sessions, windows and panes:
+
+  session NAME     Start new detached session, named NAME.
+  window NAME      Add new window to last created session.
+  pane COMMAND...  Add new pane and run COMMAND in it.
+
+Environment:
+
+  XDG_CONFIG_HOME   Defaults to \$HOME/.config
+
+Report bugs at https://github.com/241m/runamux"
+}
+
+version() {
+  echo "$(basename "$0") 0.1.0"
+  echo
+  echo "Written by Zaim Bakar."
+}
+
+#
+# main()
+#
+
+if [ -z "$1" ]; then
+  usage
+  exit 1
+fi
+
+case "$1" in
+  -h|--help)
+    usage
+    exit
+    ;;
+  --version)
+    version
+    exit
+esac
+
+# some sanity checks
+for f in runamux/notify-died runamux/notify-bell; do
+  if [ ! -f "$_pref/libexec/$f" ]; then
+    echo "Required libexec script not found: $f"
+    exit 1
+  fi
+done
+
+for f in $1 $1.conf "${XDG_CONFIG_HOME:-$HOME/.config}/runamux/$1.conf"; do
+  # shellcheck source=/dev/null
+  if [ -f "$f" ]; then
+    . "$f"
+    break
+  fi
+done

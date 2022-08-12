@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ -z "$RUNAMUX_PREFIX" ]; then
+  echo "Must be run by runamux." >&2
+  exit 2
+fi
+
+"$RUNAMUX_PREFIX/libexec/runamux/notify" died
