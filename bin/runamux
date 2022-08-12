@@ -7,14 +7,13 @@
 #  a simple tmux session runner
 #
 
-# get script install prefix
-# this assumes script is PREFIX/bin/runamux
+# Get script install prefix, assuming script is ${PREFIX}/bin/runamux
 _pref=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 readonly _pref
 
 #
-# log message
+# Log message to stderr
 #
 m() {
   echo "$*" >&2
@@ -28,42 +27,42 @@ t() {
 }
 
 #
-# tmux: silent all output
+# tmux, silent all output
 #
 s() {
   t "$@" &>/dev/null
 }
 
 #
-# tmux: silent stderr only
+# tmux, silent stderr only
 #
 e() {
   t "$@" 2>/dev/null
 }
 
 #
-# shortcut to 'tmux display-message -p'
+# Shortcut to 'tmux display-message -p'
 #
 d() {
   e display-message -p "$@"
 }
 
 #
-# get pane child process PID
+# Get pane child process PID
 #
 pane-pid() {
   d -t "$1" '#{pane_pid}'
 }
 
 #
-# has-session: check if current server has session named '$1'
+# Check if current server has session named '$1'
 #
 has-session() {
   s has-session -t "$1"
 }
 
 #
-# has-window: check if last created session has window named '$1'
+# Check if last created session has window named '$1'
 #
 has-window() {
   [ -z "$_session" ] && return 1
@@ -71,7 +70,7 @@ has-window() {
 }
 
 #
-# Start a new session
+# Start a new detached session
 #
 session() {
   _session=$1
