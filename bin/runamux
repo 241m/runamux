@@ -14,6 +14,13 @@ _pref=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 readonly _pref
 
 #
+# log message
+#
+m() {
+  echo "$*" >&2
+}
+
+#
 # tmux shortcut
 #
 t() {
@@ -74,7 +81,8 @@ session() {
     return
   fi
 
-  echo "Create session '$1'" >&2
+  m "Create session '$1'"
+
   t new-session -dn "${1}_placeholder" -s "$1" pause
   t set-environment -ht "=$1" RUNAMUX_PREFIX "$RUNAMUX_PREFIX"
 }
@@ -93,25 +101,23 @@ window() {
     return
   fi
 
-  local _ph_target="=$_session:=${_session}_placeholder"
-  local _ph_pid
+  m "Create window '$1'"
 
   _pane=$(e new-window -Pdn "$1" -t "=$_session:" -F '#D' pause)
 
-  # close placeholder window
-  if has-window "$_ph_target"; then
-    _ph_pid=$(pane-pid "$_ph_target")
+  local _ph_name="${_session}_placeholder"
+  local _ph_target="=$_session:=$_ph_name"
 
-    if (( "$_ph_pid" )); then
-      echo "Close placeholder window '$_ph_target' (PID=$_ph_pid)" >&2
+  # close placeholder window
+  if has-window "$_ph_name"; then
+    local _ph_pid
+
+    # close by killing subprocess (kill-window doesn't do this)
+    if _ph_pid=$(pane-pid "$_ph_target"); then
+      m "Close placeholder window for '$_session' (PID=$_ph_pid)"
       kill -SIGINT "$_ph_pid"
     fi
   fi
-
-  t set-option -wt "$_pane" remain-on-exit on
-  #t set-option -wt "$_pane" pane-border-status top
-  #t set-hook -wt "$_pane" pane-died "run -b $_pref/libexec/runamux/notify-died"
-  #t set-hook -wt "$_pane" alert-bell "run -b $_pref/libexec/runamux/notify-bell"
 }
 
 #
@@ -122,21 +128,27 @@ pane() {
     return 1
   fi
 
-  local _pane_pid
+  local _ppid _newp
 
-  echo "Create pane '$*'" >&2
-  t split-window -ht "=$_session:=$_window" "$*"
+  m "Create pane '$*'"
 
-  if [ "$_pane" ]; then
-    _pane_pid=$(pane-pid "$_pane")
-
-    if (( "$_pane_pid" )); then
-      echo "Close placeholder pane '$_pane' (PID=$_pane_pid)" >&2
-      kill -SIGINT "$_pane_pid"
-    fi
-
-    unset _pane
+  if _newp=$(e split-window -Pht "=$_session:=$_window" -F '#D' "$@"); then
+    t set-option -pt "$_newp" remain-on-exit on
+    t set-hook -pt "$_newp" pane-died \
+      "run -b $_pref/libexec/runamux/notify-died"
+    t set-hook -pt "$_newp" alert-bell \
+      "run -b $_pref/libexec/runamux/notify-bell"
   fi
+
+  # close placeholder pane
+  if [ "$_pane" ]; then
+    if _ppid=$(pane-pid "$_pane"); then
+      m "Close placeholder pane '$_pane' (PID=$_ppid)"
+      kill -SIGINT "$_ppid"
+    fi
+  fi
+
+  unset _pane
 }
 
 #
