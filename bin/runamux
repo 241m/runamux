@@ -152,7 +152,7 @@ pane() {
     kill-pane "$pane"
   fi
 
-  unset _pane
+  unset pane
 }
 
 #
