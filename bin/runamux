@@ -61,10 +61,26 @@ pane-pid() {
 #
 kill-pane() {
   local pid
+
+  m "Kill pane '$1'"
+
   if pid=$(pane-pid "$1") && (( pid )); then
     m "Kill child process (PID=$pid)"
     kill -SIGINT "$pid"
   fi
+}
+
+#
+# Kill window
+#
+kill-window() {
+  m "Kill window '$1'"
+
+  e list-panes -t "$1" -F '#D #{pane_pid}' | while read -r id pid; do
+    t set-option -pt "$id" remain-on-exit off
+    m "Kill child process (PID=$pid)"
+    kill -SIGINT "$pid"
+  done
 }
 
 #
@@ -107,10 +123,21 @@ window() {
     return 1
   fi
 
+  local killw=0
+
+  if [ "$1" = -k ]; then
+    killw=1
+    shift
+  fi
+
   window=$1
 
   if has-window "$1"; then
-    return
+    if (( killw )); then
+      kill-window "=$session:=$1"
+    else
+      return
+    fi
   fi
 
   m "Create window '$1'"
@@ -152,7 +179,7 @@ pane() {
     kill-pane "$pane"
   fi
 
-  unset pane
+  pane=
 }
 
 #
@@ -174,9 +201,13 @@ Runamux config directory is \$XDG_CONFIG_HOME/runamux.
 The config file must be a Bash script. These functions are
 available to start sessions, windows and panes:
 
-  session NAME     Start new detached session, named NAME.
-  window NAME      Add new window to last created session.
-  pane COMMAND...  Add new pane and run COMMAND in it.
+  session NAME      Start new detached session.
+
+  window [-k] NAME  Add a window to last created session.
+                    If '-k' option passed, and a window
+                    with same name exists, kill it.
+
+  pane COMMAND...   Add a pane and run COMMAND in it.
 
 Environment:
 

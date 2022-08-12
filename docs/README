@@ -21,13 +21,14 @@ OPTIONS
   are available to start sessions, windows and panes:
 
   session NAME
-    Start new detached session, named NAME.
+    Start new detached session.
 
-  window NAME
-    Add new window to last created session.
+  window [-k] NAME
+    Add a window to last created session.  If '-k' option
+    passed, and a window with same name exists, kill it.
 
   pane COMMAND...
-    Add new pane and run COMMAND in it.
+    Add a pane and run COMMAND in it.
 
 ENVIRONMENT
   XDG_CONFIG_HOME
