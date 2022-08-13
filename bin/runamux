@@ -114,14 +114,6 @@ session() {
 
   t new-session -dn "${1}_placeholder" -s "$1" pause
   t set-environment -t "=$1" RUNAMUX_PREFIX "$prefix"
-
-  # remove TMUX env var in all child processes.
-  # rationale: if we start an X11 hotkey daemon such as
-  # sxhkd in a pane, it will run hotkey commands as a
-  # child process, inheriting its environment, therefore
-  # we cannot run tmux (i.e. from a terminal emulator)
-  # because tmux thinks we're nesting sessions...
-  t set-environment -rt "=$1" TMUX
 }
 
 #
