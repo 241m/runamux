@@ -153,6 +153,10 @@ window() {
 
   pane=$(e new-window -Pdn "$1" -t "=$session:" -F '#D' pause)
 
+  # set remain-on-exit on window so that any panes created that
+  # exited early, will remain for reaping
+  t set-option -wt "=$session:=$1" remain-on-exit on
+
   # close placeholder window
   if has-window "${session}_placeholder"; then
     m "Close placeholder window for '$session'"
@@ -173,7 +177,6 @@ pane() {
   m "Create pane '$*'"
 
   if newp=$(e split-window -Pht "=$session:=$window" -F '#D' "$@"); then
-    t set-option -pt "$newp" remain-on-exit on
     t set-hook -pt "$newp" pane-died \
       "run -b $prefix/libexec/runamux/notify-died"
     t set-hook -pt "$newp" alert-bell \
