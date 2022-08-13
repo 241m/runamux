@@ -153,12 +153,10 @@ window() {
 
   pane=$(e new-window -Pdn "$1" -t "=$session:" -F '#D' pause)
 
-  local ph_name="${session}_placeholder"
-
   # close placeholder window
-  if has-window "$ph_name"; then
+  if has-window "${session}_placeholder"; then
     m "Close placeholder window for '$session'"
-    kill-pane "=$session:=$ph_name"
+    kill-pane "=$session:=${session}_placeholder"
   fi
 }
 
