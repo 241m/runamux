@@ -61,10 +61,19 @@ pane-pid() {
 #
 _kill() {
   local id=$1 pid=$2 target=$3
+
+  m "Kill '$target' (ID=$id PID=$pid)"
+
   t set-option -pt "$id" remain-on-exit off
   t set-hook -upt "$id" pane-died
-  m "Kill process of '$target' (ID=$id PID=$pid)"
-  kill -SIGINT "$pid"
+
+  # kill child process
+  if [ "$pid" -gt 1 ]; then
+    kill -SIGINT "$pid" >/dev/null 2>&1
+  fi
+
+  # actually close the pane (in cases where child process already died)
+  s kill-pane -t "$id"
 }
 
 #
