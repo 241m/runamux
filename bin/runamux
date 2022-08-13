@@ -157,7 +157,7 @@ window() {
   pane=$(e new-window -Pdn "$1" -t "=$session:" -F '#D' pause)
 
   # set remain-on-exit on window so that any panes created that
-  # exited early, will remain for reaping
+  # exited early, will remain for examining
   t set-option -wt "=$session:=$1" remain-on-exit on
 
   # close placeholder window
