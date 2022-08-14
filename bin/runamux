@@ -163,7 +163,8 @@ window() {
 
   local \
     kill_existing=0 \
-    window_exists=0
+    window_exists=0 \
+    target
 
   if [ "${1:?}" = -k ]; then
     kill_existing=1
@@ -183,16 +184,24 @@ window() {
   window_name=$1/TMP
   window_uuid=
 
+
   if has-window "$session_name/TMP"; then
-    t rename-window -t "$session_uuid:=$session_name/TMP" "$window_name"
+    target="$session_uuid:=$session_name/TMP"
+
+    if ! t rename-window -t "$target" "$window_name"; then
+      m "Failed to rename placeholder session window (exit status: $?)"
+      window_name=
+      return 1
+    fi
   elif ! t new-window -dn "$window_name" -t "$session_uuid:" pause; then
     m "Failed to create new window (exit status: $?)"
     window_name=
+    return 1
   fi
 
-  local t="$session_uuid:=$window_name"
+  target="$session_uuid:=$window_name"
 
-  if ! window_uuid=$(d -t "$t" '#{window_id}'); then
+  if ! window_uuid=$(d -t "$target" '#{window_id}'); then
     m "Failed to get window id (exit status: $?)"
     window_name=
     window_uuid=
