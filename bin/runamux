@@ -60,9 +60,9 @@ pane-pid() {
 # (helper) Kill pane (kills child process, not just the pane)
 #
 _kill() {
-  local id=$1 pid=$2 target=$3
+  local id=$1 pid=$2
 
-  m "Killing pane '$target' (ID=$id PID=$pid)"
+  m "Killing pane ID=$id PID=$pid"
 
   t set-option -pt "$id" remain-on-exit off
   t set-hook -upt "$id" pane-died
@@ -75,7 +75,7 @@ _kill() {
   # actually close the pane (in cases where child process already died)
   s kill-pane -t "$id"
 
-  m "Pane '$target' killed (ID=$id PID=$pid)"
+  m "Pane killed (ID=$id PID=$pid)"
 }
 
 #
@@ -83,7 +83,7 @@ _kill() {
 #
 kill-pane() {
   d -t "$1" -F '#D #{pane_pid}' | while read -r id pid; do
-    _kill "$id" "$pid" "$1"
+    _kill "$id" "$pid"
   done
 }
 
@@ -93,7 +93,7 @@ kill-pane() {
 kill-window() {
   m "Killing all panes in window '$1'"
   e list-panes -t "$1" -F '#D #{pane_pid}' | while read -r id pid; do
-    _kill "$id" "$pid" "$1"
+    _kill "$id" "$pid"
   done
 }
 
