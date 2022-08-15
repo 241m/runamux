@@ -13,6 +13,7 @@ set -u
 PREFIX=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 readonly PREFIX
+readonly LIBEXEC=${PREFIX}/libexec/runamux
 
 # global state vars
 session_name=
@@ -291,8 +292,8 @@ pane() {
     return 1
   }
 
-  t set-hook -pt "$pane" pane-died "run -b $PREFIX/libexec/runamux/notify-died"
-  t set-hook -pt "$pane" alert-bell "run -b $PREFIX/libexec/runamux/notify-bell"
+  t set-hook -pt "$pane" pane-died "run -b '$LIBEXEC/notify-died $pane'"
+  t set-hook -pt "$pane" alert-bell "run -b '$LIBEXEC/notify-bell $pane'"
 
   # close the original 'window/TMP' placeholder pane
   #
@@ -374,8 +375,8 @@ case "$1" in
 esac
 
 # some sanity checks
-for f in runamux/notify-died runamux/notify-bell; do
-  if [ ! -f "$PREFIX/libexec/$f" ]; then
+for f in $LIBEXEC/notify-died $LIBEXEC/notify-bell; do
+  if [ ! -f "$f" ]; then
     echo "Required libexec script not found: $f"
     exit 1
   fi

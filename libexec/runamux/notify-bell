@@ -1,8 +1,13 @@
 #!/bin/bash
 
-if [ -z "$RUNAMUX_PREFIX" ]; then
+[ -z "$RUNAMUX_PREFIX" ] && {
   echo "Must be run by runamux." >&2
   exit 2
-fi
+}
 
-"$RUNAMUX_PREFIX/libexec/runamux/notify" bell
+[ -z "$1" ] && {
+  echo "Usage: $0 PANE_ID"
+  exit 1
+}
+
+"$RUNAMUX_PREFIX/libexec/runamux/notify" "$1" bell

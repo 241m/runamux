@@ -1,15 +1,27 @@
 #!/bin/bash
 
-if [ -z "$TMUX" ]; then
+[ -z "$TMUX" ] && {
   echo "Must be run in tmux." >&2
   exit 1
-fi
+}
 
-if ! command -v notify-send &>/dev/null; then
+[ -z "$1" ] && {
+  echo "Usage: $0 PANE_ID [STATUS]"
+  exit 1
+}
+
+command -v notify-send &>/dev/null || {
   echo "System must have libnotify installed." >&2
   exit 127
-fi
+}
 
-if pane_cmd=$(tmux display -p '#{pane_start_command}'); then
-  notify-send "runamux pane $1" "$pane_cmd"
-fi
+s=$(tmux display -t "$1" -p '#{session_attached} #{pane_start_command}') && {
+  read -r sess cmd <<< "$s"
+
+  # only notify if session is detached
+  if (( sess )); then
+    exit
+  fi
+
+  notify-send "runamux pane${2:+ $2}" "$cmd"
+}
