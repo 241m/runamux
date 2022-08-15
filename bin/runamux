@@ -171,9 +171,10 @@ session() {
     session_uuid=$(d -t "$t:" '#{session_id}') || {
       m "failed to get session id (exit status: $?)"
       session_uuid=
+      return 1
     }
 
-    return 1
+    return
   }
 
   # create placeholder window 'session/TMP' as first window,
