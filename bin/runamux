@@ -10,9 +10,9 @@
 set -u
 
 # Get script install prefix, assuming script is ${PREFIX}/bin/runamux
-prefix=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+PREFIX=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
-readonly prefix
+readonly PREFIX
 
 # global state vars
 session_name=
@@ -70,7 +70,7 @@ _kill() {
     id=${1:?_kill id arg required} \
     pid=${2:?_kill pid arg required}
 
-  m "Killing pane ID=$id PID=$pid"
+  m "killing pane ID=$id PID=$pid"
 
   t set-option -pt "$id" remain-on-exit off
   t set-hook -upt "$id" pane-died
@@ -81,7 +81,7 @@ _kill() {
   # actually close the pane
   s kill-pane -t "$id"
 
-  m "Pane killed (ID=$id PID=$pid)"
+  m "pane killed (ID=$id PID=$pid)"
 }
 
 #
@@ -89,7 +89,7 @@ _kill() {
 #
 _session-active() {
   [ -z "$session_uuid" ] && {
-    m "Error: no session created"
+    m "ERROR: no session created"
     return 1
   }
   return 0
@@ -103,7 +103,7 @@ _window-active() {
     return 1
   }
   [ -z "$window_uuid" ] && {
-    m "Error: no window created"
+    m "ERROR: no window created"
     return 1
   }
   return 0
@@ -128,7 +128,7 @@ kill-pane() {
 kill-window() {
   _session-active || return 1
 
-  m "Killing all panes in window '${1:?kill-window window arg required}'"
+  m "killing all panes in window '${1:?kill-window window arg required}'"
 
   local t="$session_uuid:$1"
 
@@ -161,16 +161,16 @@ session() {
   window_name=
   window_uuid=
 
-  m "Creating session"
+  m "creating session '$session_name'"
 
   local n=$session_name
   local t="=$n"
 
   has-session "$t" && {
-    m "Session already exists: do nothing"
+    m "session already exists: do nothing"
 
     session_uuid=$(d -t "$t:" '#{session_id}') || {
-      m "Failed to get session id (exit status: $?)"
+      m "failed to get session id (exit status: $?)"
       session_uuid=
     }
 
@@ -178,15 +178,15 @@ session() {
   }
 
   session_uuid=$(e new -dn "${n}/TMP" -s "$n" -PF '#{session_id}' pause) || {
-    m "Failed to create session (exit status: $?)"
+    m "failed to create session (exit status: $?)"
     session_name=
     session_uuid=
     return 1
   }
 
-  t set-environment -t "$session_uuid" RUNAMUX_PREFIX "$prefix"
+  t set-environment -t "$session_uuid" RUNAMUX_PREFIX "$PREFIX"
 
-  m "Session created"
+  m "session created"
 }
 
 #
@@ -204,11 +204,11 @@ window() {
     shift
   }
 
-  m "Creating window '${1:?window arg required}'"
+  m "creating window '${1:?window arg required}'"
 
   has-window "$1" && {
     (( !kill_existing )) && {
-      m "Window already exists: do nothing"
+      m "window already exists: do nothing"
       return 1
     }
 
@@ -222,13 +222,13 @@ window() {
     local t="$session_uuid:=$session_name/TMP"
 
     t rename-window -t "$t" "$window_name" || {
-      m "Failed to rename placeholder session window (exit status: $?)"
+      m "failed to rename placeholder session window (exit status: $?)"
       window_name=
       return 1
     }
   else
     t new-window -dn "$window_name" -t "$session_uuid:" pause || {
-      m "Failed to create new window (exit status: $?)"
+      m "failed to create new window (exit status: $?)"
       window_name=
       return 1
     }
@@ -237,7 +237,7 @@ window() {
   local t="$session_uuid:=$window_name"
 
   window_uuid=$(d -t "$t" '#{window_id}') || {
-    m "Failed to get window id (exit status: $?)"
+    m "failed to get window id (exit status: $?)"
     window_name=
     window_uuid=
     return 1
@@ -252,7 +252,7 @@ window() {
   # exited early, will remain for examining
   t set-option -wt "$session_uuid:$window_uuid" remain-on-exit on
 
-  m "Window '$1' created"
+  m "window '$1' created"
 }
 
 #
@@ -262,7 +262,7 @@ pane() {
   _window-active || return 1
 
   [ -z "$window_name" ] && {
-    m "Error: window active but has no name (bug?)"
+    m "ERROR: window active but has no name (bug?)"
     return 1
   }
 
@@ -271,28 +271,28 @@ pane() {
     placeholder='' \
     pane
 
-  m "Creating pane '$*'"
+  m "creating pane '$*'"
 
   [[ "$window_name" = */TMP ]] && {
     placeholder=$(d -t "$session_uuid:=$window_name" '#{pane_id}')
   }
 
   pane=$(e split-window -Pht "$target" -F '#D' "$@") || {
-    m "Failed to add pane (exit status: $?)"
+    m "failed to add pane (exit status: $?)"
     return 1
   }
 
-  t set-hook -pt "$pane" pane-died "run -b $prefix/libexec/runamux/notify-died"
-  t set-hook -pt "$pane" alert-bell "run -b $prefix/libexec/runamux/notify-bell"
+  t set-hook -pt "$pane" pane-died "run -b $PREFIX/libexec/runamux/notify-died"
+  t set-hook -pt "$pane" alert-bell "run -b $PREFIX/libexec/runamux/notify-bell"
 
   [ "$placeholder" ] && {
-    m "Closing placeholder pane '$window_name' (ID=$placeholder)"
+    m "closing placeholder pane '$window_name' (ID=$placeholder)"
     window_name=${window_name%%/TMP}
     kill-pane "$placeholder"
     t rename-window -t "$session_uuid:$window_uuid" "$window_name"
   }
 
-  m "Pane '$1' created"
+  m "pane '$1' created"
 }
 
 #
@@ -356,7 +356,7 @@ esac
 
 # some sanity checks
 for f in runamux/notify-died runamux/notify-bell; do
-  if [ ! -f "$prefix/libexec/$f" ]; then
+  if [ ! -f "$PREFIX/libexec/$f" ]; then
     echo "Required libexec script not found: $f"
     exit 1
   fi
