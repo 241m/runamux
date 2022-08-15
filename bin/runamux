@@ -59,12 +59,12 @@ m() {
   echo "[runamux${session_name:+ $session_name}] $*" >&2
 }
 
-# Kill pane (kills child process, not just the pane)
+# Close pane (kills child process, not just the pane)
 #
-_kill() {
+close() {
   local \
-    id=${1:?_kill id arg required} \
-    pid=${2:?_kill pid arg required}
+    id=${1:?close id arg required} \
+    pid=${2:?close pid arg required}
 
   m "killing pane ID=$id PID=$pid"
 
@@ -80,9 +80,9 @@ _kill() {
   m "pane killed (ID=$id PID=$pid)"
 }
 
-# Check if there is an active session
+# Ensure there is an active session
 #
-_session-active() {
+session-active() {
   [ -z "$session_uuid" ] && {
     m "ERROR: no session created"
     return 1
@@ -90,16 +90,18 @@ _session-active() {
   return 0
 }
 
-# Check if there is an active session AND window
+# Ensure there is an active session AND window
 #
-_window-active() {
-  _session-active || {
+window-active() {
+  session-active || {
     return 1
   }
+
   [ -z "$window_uuid" ] && {
     m "ERROR: no window created"
     return 1
   }
+
   return 0
 }
 
@@ -116,26 +118,26 @@ pane-pid() {
 # Kill pane (kill child process and close pane)
 #
 kill-pane() {
-  _window-active || return 1
+  window-active || return 1
 
   local t="$session_uuid:$window_uuid.$1"
 
   d -t "$t" -F '#D #{pane_pid}' | while read -r id pid; do
-    _kill "$id" "$pid"
+    close "$id" "$pid"
   done
 }
 
 # Kill window (kill child process of all child panes)
 #
 kill-window() {
-  _session-active || return 1
+  session-active || return 1
 
   m "killing all panes in window '${1:?kill-window window arg required}'"
 
   local t="$session_uuid:$1"
 
   e list-panes -t "$t" -F '#D #{pane_pid}' | while read -r id pid; do
-    _kill "$id" "$pid"
+    close "$id" "$pid"
   done
 }
 
@@ -148,7 +150,7 @@ has-session() {
 # Check if last created session has window named '$1'
 #
 has-window() {
-  _session-active || return 1
+  session-active || return 1
   tmux list-windows -F '#W' -t "$session_uuid" | grep -sq "^${1:?}$"
 }
 
@@ -195,7 +197,7 @@ session() {
 # Add a new window in last created session
 #
 window() {
-  _session-active || return 1
+  session-active || return 1
 
   local \
     kill_existing=0 \
@@ -265,7 +267,7 @@ window() {
 # Create new pane (horizontal split)
 #
 pane() {
-  _window-active || return 1
+  window-active || return 1
 
   [ -z "$window_name" ] && {
     m "ERROR: window active but has no name (bug?)"
