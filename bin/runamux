@@ -129,24 +129,26 @@ session() {
 
   m "Creating session"
 
-  if has-session "=$session_name"; then
-    if ! session_uuid=$(d -t "=$session_name:" '#{session_id}'); then
-      m "Failed to get session id (exit status: $?)"
-      return 1
-    fi
+  local n=$session_name
+  local t="=$n"
+
+  has-session "$t" && {
     m "Session already exists: do nothing"
+
+    session_uuid=$(d -t "$t:" '#{session_id}') || {
+      m "Failed to get session id (exit status: $?)"
+      session_uuid=
+    }
+
     return 1
-  fi
+  }
 
-  local id n=$session_name
-
-  if id=$(e new -dn "${n}/TMP" -s "$n" -PF '#{session_id}' pause); then
-    session_uuid=$id
-  else
+  session_uuid=$(e new -dn "${n}/TMP" -s "$n" -PF '#{session_id}' pause) || {
     m "Failed to create session (exit status: $?)"
     session_name=
+    session_uuid=
     return 1
-  fi
+  }
 
   t set-environment -t "$session_uuid" RUNAMUX_PREFIX "$prefix"
 
