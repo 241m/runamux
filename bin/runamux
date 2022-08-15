@@ -307,6 +307,9 @@ pane() {
     t rename-window -t "$session_uuid:$window_uuid" "$window_name"
   }
 
+  # auto apply tiled layout
+  t select-layout -t "$session_uuid:$window_uuid" tiled
+
   m "pane '$1' created"
 }
 
