@@ -85,18 +85,35 @@ _kill() {
 }
 
 #
-# Kill pane
+# (helper) check if there is a session active
 #
-kill-pane() {
-  [[ -z "$session_uuid" ]] && {
+_session-active() {
+  [ -z "$session_uuid" ] && {
     m "Error: no session created"
     return 1
   }
+  return 0
+}
 
-  [[ -z "$window_uuid" ]] && {
+#
+# (helper) check if there is a session AND window active
+#
+_window-active() {
+  _session-active || {
+    return 1
+  }
+  [ -z "$window_uuid" ] && {
     m "Error: no window created"
     return 1
   }
+  return 0
+}
+
+#
+# Kill pane
+#
+kill-pane() {
+  _window-active || return 1
 
   local t="$session_uuid:$window_uuid.$1"
 
@@ -109,10 +126,7 @@ kill-pane() {
 # Kill window (kill child process of all child panes)
 #
 kill-window() {
-  [[ -z "$session_uuid" ]] && {
-    m "Error: no session created"
-    return 1
-  }
+  _session-active || return 1
 
   m "Killing all panes in window '${1:?kill-window window arg required}'"
 
@@ -134,7 +148,7 @@ has-session() {
 # Check if last created session has window named '$1'
 #
 has-window() {
-  [ -z "$session_uuid" ] && return 1
+  _session-active || return 1
   tmux list-windows -F '#W' -t "$session_uuid" | grep -sq "^${1:?}$"
 }
 
@@ -179,9 +193,7 @@ session() {
 # Add a new window in last created session
 #
 window() {
-  if [ -z "$session_uuid" ]; then
-    return 1
-  fi
+  _session-active || return 1
 
   local \
     kill_existing=0 \
@@ -245,10 +257,12 @@ window() {
 # Create new pane (horizontal split)
 #
 pane() {
-  if [ -z "$session_uuid" ] || [ -z "$window_name" ] || [ -z "$window_uuid" ]
-  then
+  _window-active || return 1
+
+  [ -z "$window_name" ] && {
+    m "Error: window active but has no name (bug?)"
     return 1
-  fi
+  }
 
   local \
     target="$session_uuid:$window_uuid" \
