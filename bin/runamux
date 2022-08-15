@@ -66,7 +66,9 @@ pane-pid() {
 # (helper) Kill pane (kills child process, not just the pane)
 #
 _kill() {
-  local id=$1 pid=$2
+  local \
+    id=${1:?_kill id arg required} \
+    pid=${2:?_kill pid arg required}
 
   m "Killing pane ID=$id PID=$pid"
 
@@ -74,11 +76,9 @@ _kill() {
   t set-hook -upt "$id" pane-died
 
   # kill child process
-  if [ "$pid" -gt 1 ]; then
-    kill -SIGINT "$pid" >/dev/null 2>&1
-  fi
+  (( pid > 1 )) && kill -SIGINT "$pid" &>/dev/null
 
-  # actually close the pane (in cases where child process already died)
+  # actually close the pane
   s kill-pane -t "$id"
 
   m "Pane killed (ID=$id PID=$pid)"
@@ -183,7 +183,6 @@ window() {
 
   window_name=$1/TMP
   window_uuid=
-
 
   if has-window "$session_name/TMP"; then
     target="$session_uuid:=$session_name/TMP"
