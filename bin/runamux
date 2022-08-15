@@ -177,7 +177,7 @@ session() {
   }
 
   # create placeholder window 'session/TMP' as first window,
-  # running the `pause` command (simply waits for a single)
+  # running the `pause` command (simply waits for a signal)
   session_uuid=$(e new -dn "${n}/TMP" -s "$n" -PF '#{session_id}' pause) || {
     m "failed to create session (exit status: $?)"
     session_name=
