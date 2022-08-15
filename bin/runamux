@@ -21,34 +21,27 @@ window_name=
 window_uuid=
 
 #
-# Log message to stderr
+# tmux command shortcuts
 #
-m() {
-  echo "[runamux${session_name:+ $session_name}] $*" >&2
-}
 
-#
 # tmux shortcut
 #
 t() {
   tmux "$@"
 }
 
-#
 # tmux, silent all output
 #
 s() {
   t "$@" &>/dev/null
 }
 
-#
 # tmux, silent stderr only
 #
 e() {
   t "$@" 2>/dev/null
 }
 
-#
 # Shortcut to 'tmux display-message -p'
 #
 d() {
@@ -56,14 +49,16 @@ d() {
 }
 
 #
-# Get pane child process PID
+# Helpers
 #
-pane-pid() {
-  d -t "$1" '#{pane_pid}'
+
+# Log message to stderr
+#
+m() {
+  echo "[runamux${session_name:+ $session_name}] $*" >&2
 }
 
-#
-# (helper) Kill pane (kills child process, not just the pane)
+# Kill pane (kills child process, not just the pane)
 #
 _kill() {
   local \
@@ -84,8 +79,7 @@ _kill() {
   m "pane killed (ID=$id PID=$pid)"
 }
 
-#
-# (helper) check if there is a session active
+# Check if there is an active session
 #
 _session-active() {
   [ -z "$session_uuid" ] && {
@@ -95,8 +89,7 @@ _session-active() {
   return 0
 }
 
-#
-# (helper) check if there is a session AND window active
+# Check if there is an active session AND window
 #
 _window-active() {
   _session-active || {
@@ -110,7 +103,16 @@ _window-active() {
 }
 
 #
-# Kill pane
+# Commands
+#
+
+# Get pane child process PID
+#
+pane-pid() {
+  d -t "$1" '#{pane_pid}'
+}
+
+# Kill pane (kill child process and close pane)
 #
 kill-pane() {
   _window-active || return 1
@@ -122,7 +124,6 @@ kill-pane() {
   done
 }
 
-#
 # Kill window (kill child process of all child panes)
 #
 kill-window() {
@@ -137,14 +138,12 @@ kill-window() {
   done
 }
 
-#
 # Check if current server has session named '$1'
 #
 has-session() {
   s has-session -t "$1"
 }
 
-#
 # Check if last created session has window named '$1'
 #
 has-window() {
@@ -152,7 +151,6 @@ has-window() {
   tmux list-windows -F '#W' -t "$session_uuid" | grep -sq "^${1:?}$"
 }
 
-#
 # Start a new detached session
 #
 session() {
@@ -177,6 +175,8 @@ session() {
     return 1
   }
 
+  # create placeholder window 'session/TMP' as first window,
+  # running the `pause` command (simply waits for a single)
   session_uuid=$(e new -dn "${n}/TMP" -s "$n" -PF '#{session_id}' pause) || {
     m "failed to create session (exit status: $?)"
     session_name=
@@ -184,12 +184,12 @@ session() {
     return 1
   }
 
+  # set RUNAMUX_PREFIX env var of our libexec scripts
   t set-environment -t "$session_uuid" RUNAMUX_PREFIX "$PREFIX"
 
   m "session created"
 }
 
-#
 # Add a new window in last created session
 #
 window() {
@@ -218,6 +218,9 @@ window() {
   window_name=$1/TMP
   window_uuid=
 
+  # if this is the first window created for the session,
+  # simply rename the original placeholder 'session/TMP'
+  # window to 'window/TMP', as a first pane placeholder
   if has-window "$session_name/TMP"; then
     local t="$session_uuid:=$session_name/TMP"
 
@@ -227,6 +230,8 @@ window() {
       return 1
     }
   else
+    # otherwise this is the 2nd window onwards, create the
+    # placeholder pane 'window/TMP', with the `pause` command
     t new-window -dn "$window_name" -t "$session_uuid:" pause || {
       m "failed to create new window (exit status: $?)"
       window_name=
@@ -255,7 +260,6 @@ window() {
   m "window '$1' created"
 }
 
-#
 # Create new pane (horizontal split)
 #
 pane() {
@@ -273,10 +277,15 @@ pane() {
 
   m "creating pane '$*'"
 
+  # if this is the first pane created for the window,
+  # a 'window/TMP' pane was already created, we don't
+  # need this pane anymore. save its pane_id so we can
+  # close it *AFTER* creating the new pane
   [[ "$window_name" = */TMP ]] && {
     placeholder=$(d -t "$session_uuid:=$window_name" '#{pane_id}')
   }
 
+  # split the window to create the pane
   pane=$(e split-window -Pht "$target" -F '#D' "$@") || {
     m "failed to add pane (exit status: $?)"
     return 1
@@ -285,6 +294,11 @@ pane() {
   t set-hook -pt "$pane" pane-died "run -b $PREFIX/libexec/runamux/notify-died"
   t set-hook -pt "$pane" alert-bell "run -b $PREFIX/libexec/runamux/notify-bell"
 
+  # close the original 'window/TMP' placeholder pane
+  #
+  # NOTE: we could just `tmux respawn-pane` with the new command,
+  # but in doing so it seems tmux doesn't properly send SIGINT
+  # to the child process.
   [ "$placeholder" ] && {
     m "closing placeholder pane '$window_name' (ID=$placeholder)"
     window_name=${window_name%%/TMP}
@@ -296,6 +310,9 @@ pane() {
 }
 
 #
+# Usage and Version
+#
+
 # Print usage
 #
 usage() {
@@ -329,6 +346,8 @@ Environment:
 Report bugs at https://github.com/241m/runamux"
 }
 
+# Version and author
+#
 version() {
   echo "$(basename "$0") 0.1.0"
   echo
