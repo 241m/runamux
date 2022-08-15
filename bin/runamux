@@ -15,9 +15,11 @@ PREFIX=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 readonly PREFIX
 readonly LIBEXEC=${PREFIX}/libexec/runamux
 
-# global state vars
+# active session
 session_name=
 session_uuid=
+
+# active window
 window_name=
 window_uuid=
 
@@ -56,264 +58,177 @@ d() {
 # Log message to stderr
 #
 m() {
-  echo "[runamux${session_name:+ $session_name}] $*" >&2
+  local s=${session_name:+ $session_name}${window_name:+:$window_name}
+  echo "runamux$s $*" >&2
 }
 
-# Close pane (kills child process, not just the pane)
+# Get arbitrary info about target
 #
-close() {
-  local \
-    id=${1:?close id arg required} \
-    pid=${2:?close pid arg required}
-
-  m "killing pane ID=$id PID=$pid"
-
-  t set-option -pt "$id" remain-on-exit off
-  t set-hook -upt "$id" pane-died
-
-  # kill child process
-  (( pid > 1 )) && kill -SIGINT "$pid" &>/dev/null
-
-  # actually close the pane
-  s kill-pane -t "$id"
-
-  m "pane killed (ID=$id PID=$pid)"
-}
-
-# Ensure there is an active session
-#
-session-active() {
-  [ -z "$session_uuid" ] && {
-    m "ERROR: no session created"
-    return 1
-  }
-  return 0
-}
-
-# Ensure there is an active session AND window
-#
-window-active() {
-  session-active || {
-    return 1
-  }
-
-  [ -z "$window_uuid" ] && {
-    m "ERROR: no window created"
-    return 1
-  }
-
-  return 0
-}
-
-#
-# Commands
-#
-
-# Get pane child process PID
-#
-pane-pid() {
-  d -t "$1" '#{pane_pid}'
-}
-
-# Kill pane (kill child process and close pane)
-#
-kill-pane() {
-  window-active || return 1
-
-  local t="$session_uuid:$window_uuid.$1"
-
-  d -t "$t" -F '#D #{pane_pid}' | while read -r id pid; do
-    close "$id" "$pid"
-  done
-}
-
-# Kill window (kill child process of all child panes)
-#
-kill-window() {
-  session-active || return 1
-
-  m "killing all panes in window '${1:?kill-window window arg required}'"
-
-  local t="$session_uuid:$1"
-
-  e list-panes -t "$t" -F '#D #{pane_pid}' | while read -r id pid; do
-    close "$id" "$pid"
-  done
+get() {
+  : "${1:?get key name required}"
+  : "${2:?get target required}"
+  d -t "$2" "#{$1}"
 }
 
 # Check if current server has session named '$1'
 #
 has-session() {
+  : "${1:?has-session target required}"
   s has-session -t "$1"
 }
 
 # Check if last created session has window named '$1'
 #
 has-window() {
-  session-active || return 1
-  tmux list-windows -F '#W' -t "$session_uuid" | grep -sq "^${1:?}$"
+  : "${1:?has-window target required}"
+  : "${session_uuid:?has-window requires a created session}"
+  e list-windows -F '#W' -t "$session_uuid" | grep -sq "^$1$"
 }
 
-# Start a new detached session
+# Kill old unused sessions/windows
+#
+kill-all() {
+  : # TODO
+}
+
+#
+# Commands
+#
+
+# Start a detached session
 #
 session() {
-  session_name=${1:?}
+  session_name=
   session_uuid=
   window_name=
   window_uuid=
 
-  m "creating session '$session_name'"
+  local tokill=0
 
-  local n=$session_name
-  local t="=$n"
-
-  has-session "$t" && {
-    m "session already exists: do nothing"
-
-    session_uuid=$(d -t "$t:" '#{session_id}') || {
-      m "failed to get session id (exit status: $?)"
-      session_uuid=
-      return 1
-    }
-
-    return
+  [ "$1" = -k ] && {
+    tokill=1
+    shift
   }
 
-  # create placeholder window 'session/TMP' as first window,
-  # running the `pause` command (simply waits for a signal)
-  session_uuid=$(e new -dn "${n}/TMP" -s "$n" -PF '#{session_id}' pause) || {
-    m "failed to create session (exit status: $?)"
-    session_name=
-    session_uuid=
+  [ "$1" ] || {
+    m "ERROR: session name required"
     return 1
   }
 
-  # set RUNAMUX_PREFIX env var of our libexec scripts
-  t set-environment -t "$session_uuid" RUNAMUX_PREFIX "$PREFIX"
+  session_name=$1
 
-  m "session created"
+  m "activating session '$session_name'"
+
+  has-session "$session_name" && {
+    m "session named '$session_name' already exists"
+
+    (( tokill )) && {
+      : # TODO
+    }
+  }
 }
 
 # Add a new window in last created session
 #
 window() {
-  session-active || return 1
+  window_name=
+  window_uuid=
 
-  local \
-    kill_existing=0 \
-    window_exists=0
+  local tokill=0
 
-  [ "${1:?window arg required}" = -k ] && {
-    kill_existing=1
+  [ "$1" = -k ] && {
+    tokill=1
     shift
   }
 
-  m "creating window '${1:?window arg required}'"
-
-  has-window "$1" && {
-    (( !kill_existing )) && {
-      m "window already exists: do nothing"
-      return 1
-    }
-
-    window_exists=1
-  }
-
-  window_name=$1/TMP
-  window_uuid=
-
-  # if this is the first window created for the session,
-  # simply rename the original placeholder 'session/TMP'
-  # window to 'window/TMP', as a first pane placeholder
-  if has-window "$session_name/TMP"; then
-    local t="$session_uuid:=$session_name/TMP"
-
-    t rename-window -t "$t" "$window_name" || {
-      m "failed to rename placeholder session window (exit status: $?)"
-      window_name=
-      return 1
-    }
-  else
-    # otherwise this is the 2nd window onwards, create the
-    # placeholder pane 'window/TMP', with the `pause` command
-    t new-window -dn "$window_name" -t "$session_uuid:" pause || {
-      m "failed to create new window (exit status: $?)"
-      window_name=
-      return 1
-    }
-  fi
-
-  local t="$session_uuid:=$window_name"
-
-  window_uuid=$(d -t "$t" '#{window_id}') || {
-    m "failed to get window id (exit status: $?)"
-    window_name=
-    window_uuid=
+  [ "$1" ] || {
+    m "ERROR: window name required"
     return 1
   }
 
-  # kill existing window, if any
-  if (( window_exists )); then
-    kill-window "=$1"
-  fi
+  [ "$session_name" ] || {
+    m "ERROR: no active session to create window in (call 'session' first)"
+    return 1
+  }
 
-  # set remain-on-exit on window so that any panes created that
-  # exited early, will remain for examining
-  t set-option -wt "$session_uuid:$window_uuid" remain-on-exit on
+  window_name=$1
 
-  m "window '$1' created"
+  m "activating window '$window_name'"
+
+  [ "$session_uuid" ] || {
+    return
+  }
+
+  has-window "$window_name" && {
+    m "window named '$window_name' already exists"
+
+    (( tokill )) && {
+      : # TODO
+    }
+  }
 }
 
 # Create new pane (horizontal split)
 #
 pane() {
-  window-active || return 1
-
-  [ -z "$window_name" ] && {
-    m "ERROR: window active but has no name (bug?)"
+  [ "$1" ] || {
+    m "ERROR: pane command arg required"
     return 1
   }
 
-  local \
-    target="$session_uuid:$window_uuid" \
-    placeholder='' \
-    pane
+  trap kill-all RETURN
 
-  m "creating pane '$*'"
-
-  # if this is the first pane created for the window,
-  # a 'window/TMP' pane was already created, we don't
-  # need this pane anymore. save its pane_id so we can
-  # close it *AFTER* creating the new pane
-  [[ "$window_name" = */TMP ]] && {
-    placeholder=$(d -t "$session_uuid:=$window_name" '#{pane_id}')
+  [ "$window_uuid" ] && {
+    m "split-window '$window_name'"
+    m "- command: '$*'"
+    t splitw -ht "$window_uuid" "$@"
+    t selectl -t "$window_uuid" tiled
+    return
   }
 
-  # split the window to create the pane
-  pane=$(e split-window -Pht "$target" -F '#D' "$@") || {
-    m "failed to add pane (exit status: $?)"
+  [ "$window_name" ] || {
+    m "ERROR: no active window to create pane in (call 'window' first)"
     return 1
   }
 
-  t set-hook -pt "$pane" pane-died "run -b '$LIBEXEC/notify-died $pane'"
-  t set-hook -pt "$pane" alert-bell "run -b '$LIBEXEC/notify-bell $pane'"
+  [ "$session_uuid" ] && {
+    local t="$session_uuid:"
+    local f="#{window_id}"
 
-  # close the original 'window/TMP' placeholder pane
-  #
-  # NOTE: we could just `tmux respawn-pane` with the new command,
-  # but in doing so it seems tmux doesn't properly send SIGINT
-  # to the child process.
-  [ "$placeholder" ] && {
-    m "closing placeholder pane '$window_name' (ID=$placeholder)"
-    window_name=${window_name%%/TMP}
-    kill-pane "$placeholder"
-    t rename-window -t "$session_uuid:$window_uuid" "$window_name"
+    m "new-window '$window_name'"
+    m "- command '$*'"
+    window_uuid=$(e neww -dt "$t" -n "$window_name" -PF "$f" "$@") || {
+      m "could not create new window (exit $?)"
+      window_uuid=
+      return 1
+    }
+
+    return 0
   }
 
-  # auto apply tiled layout
-  t select-layout -t "$session_uuid:$window_uuid" tiled
+  [ "$session_name" ] && {
+    local s=$session_name
+    local w=$window_name
+    local f='#{session_id} #{window_id}'
+    local d
 
-  m "pane '$1' created"
+    m "new-session '$s'"
+    m "- window '$w'"
+    m "-- command '$*'"
+    d=$(e new -ds "$s" -n "$w" -PF "$f" "$@") || {
+      m "could not create new session (exit $?)"
+      session_uuid=
+      return 1
+    }
+
+    read -r session_uuid window_uuid <<< "$d"
+
+    return
+  }
+
+  m "ERROR: no active session to create pane in (call 'session' first)"
+
+  return 1
 }
 
 #
@@ -338,13 +253,14 @@ Runamux config directory is \$XDG_CONFIG_HOME/runamux.
 The config file must be a Bash script. These functions are
 available to start sessions, windows and panes:
 
-  session NAME      Start new detached session.
+  session [-k] NAME  Start new detached session. If the
+                     '-k' flag is passed, and a session
+                     with same name exists, kill it.
 
-  window [-k] NAME  Add a window to last created session.
-                    If '-k' option passed, and a window
-                    with same name exists, kill it.
+  window [-k] NAME   Add a window to last created session.
+                     The '-k' flag is similiar to above.
 
-  pane COMMAND...   Add a pane and run COMMAND in it.
+  pane COMMAND...    Add a pane and run COMMAND in it.
 
 Environment:
 
