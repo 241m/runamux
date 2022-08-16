@@ -85,9 +85,21 @@ has-window() {
   e list-windows -F '#W' -t "$session_uuid" | grep -sq "^$1$"
 }
 
+# Make window defuct
+#
+defunct-window() {
+  :
+}
+
+# Make entire session defuct
+#
+defunct-session() {
+  :
+}
+
 # Kill old unused sessions/windows
 #
-kill-all() {
+kill-defuncts() {
   : # TODO
 }
 
@@ -123,7 +135,7 @@ session() {
     m "session named '$session_name' already exists"
 
     (( tokill )) && {
-      : # TODO
+      defuct-session "=$session_name"
     }
   }
 }
@@ -163,7 +175,7 @@ window() {
     m "window named '$window_name' already exists"
 
     (( tokill )) && {
-      : # TODO
+      defuct-window "$session_uuid:=$window_name"
     }
   }
 }
@@ -171,13 +183,25 @@ window() {
 # Create new pane (horizontal split)
 #
 pane() {
-  [ "$1" ] || {
+  [ -z "$1" ] && {
     m "ERROR: pane command arg required"
     return 1
   }
 
-  trap kill-all RETURN
+  [ -z "$window_name" ] && {
+    m "ERROR: no active window to create pane in (call 'window' first)"
+    return 1
+  }
 
+  [ -z "$session_name" ] && {
+    m "ERROR: no active session to create windows in (call 'session' first)"
+    return 1
+  }
+
+  trap kill-defuncts RETURN
+
+  # active window already created:
+  # use 'split-window'
   [ "$window_uuid" ] && {
     m "split-window '$window_name'"
     m "- command: '$*'"
@@ -186,11 +210,8 @@ pane() {
     return
   }
 
-  [ "$window_name" ] || {
-    m "ERROR: no active window to create pane in (call 'window' first)"
-    return 1
-  }
-
+  # no window, but active session already created:
+  # use 'new-window'
   [ "$session_uuid" ] && {
     local t="$session_uuid:"
     local f="#{window_id}"
@@ -203,32 +224,27 @@ pane() {
       return 1
     }
 
-    return 0
-  }
-
-  [ "$session_name" ] && {
-    local s=$session_name
-    local w=$window_name
-    local f='#{session_id} #{window_id}'
-    local d
-
-    m "new-session '$s'"
-    m "- window '$w'"
-    m "-- command '$*'"
-    d=$(e new -ds "$s" -n "$w" -PF "$f" "$@") || {
-      m "could not create new session (exit $?)"
-      session_uuid=
-      return 1
-    }
-
-    read -r session_uuid window_uuid <<< "$d"
-
     return
   }
 
-  m "ERROR: no active session to create pane in (call 'session' first)"
+  # active session and window not yet created
+  # use 'new-session'
 
-  return 1
+  local s=$session_name
+  local w=$window_name
+  local f='#{session_id} #{window_id}'
+  local d
+
+  m "new-session '$s'"
+  m "- window '$w'"
+  m "-- command '$*'"
+  d=$(e new -ds "$s" -n "$w" -PF "$f" "$@") || {
+    m "could not create new session (exit $?)"
+    session_uuid=
+    return 1
+  }
+
+  read -r session_uuid window_uuid <<< "$d"
 }
 
 #
