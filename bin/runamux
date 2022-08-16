@@ -110,7 +110,7 @@ session() {
     shift
   }
 
-  [ "$1" ] || {
+  [ -z "$1" ] && {
     m "ERROR: session name required"
     return 1
   }
@@ -141,12 +141,12 @@ window() {
     shift
   }
 
-  [ "$1" ] || {
+  [ -z "$1" ] && {
     m "ERROR: window name required"
     return 1
   }
 
-  [ "$session_name" ] || {
+  [ -z "$session_name" ] && {
     m "ERROR: no active session to create window in (call 'session' first)"
     return 1
   }
@@ -155,7 +155,7 @@ window() {
 
   m "activating window '$window_name'"
 
-  [ "$session_uuid" ] || {
+  [ -z "$session_uuid" ] && {
     return
   }
 
