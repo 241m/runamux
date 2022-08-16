@@ -110,7 +110,7 @@ defunct() {
 # Kill defunct sessions/windows
 #
 kill-defuncts() {
-  local id pid ppid
+  local id cid pid
   local windows sessions
 
   [ -z "$defuncts" ] && {
@@ -120,23 +120,30 @@ kill-defuncts() {
   m "killing defuncts: ${defuncts:-}"
 
   for id in ${defuncts:-}; do
-    [ "${id:0:1}" = '@' ] && windows="${windows:+$windows }$id"
-    [ "${id:0:1}" = '$' ] && sessions="${sessions:+$sessions }$id"
+    [ "${id:0:1}" = '@' ] && {
+      windows="${windows:+$windows }$id"
+    }
+    [ "${id:0:1}" = '$' ] && {
+      sessions="${sessions:+$sessions }$id"
+      while read -r cid; do
+        windows="${windows:+$windows }$cid"
+      done < <(e list-windows -t "$id" -F '#{window_id}')
+    }
   done
 
   for id in ${windows:-}; do
-    e list-panes -t "$id" -F '#D #{pane_pid}' | while read -r pid ppid; do
-      m "klling pane $pid (PID=$ppid)"
+    e list-panes -t "$id" -F '#D #{pane_pid}' | while read -r cid ppid; do
+      m "klling pane $cid (PID=$pid)"
 
       # unset remain-on-exit and pane-died before killing
-      s set-option -pt "$pid" remain-on-exit off
-      s set-hook -upt "$pid" pane-died
+      s set-option -pt "$cid" remain-on-exit off
+      s set-hook -upt "$cid" pane-died
 
       # kill child process with SIGINT
-      (( ppid > 1 )) && kill -SIGINT "$ppid" &>/dev/null
+      (( ppid > 1 )) && kill -SIGINT "$pid" &>/dev/null
 
       # close actual pane
-      s kill-pane -t "$pid"
+      s kill-pane -t "$cid"
     done
 
     m "klling window $id"
