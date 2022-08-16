@@ -23,6 +23,9 @@ session_uuid=
 window_name=
 window_uuid=
 
+# defunct list
+defuncts=
+
 #
 # tmux command shortcuts
 #
@@ -85,22 +88,61 @@ has-window() {
   e list-windows -F '#W' -t "$session_uuid" | grep -sq "^$1$"
 }
 
-# Make window defuct
+# Make window/session defunct
 #
-defunct-window() {
-  :
+defunct() {
+  : "${1:?defunct type required}"
+  : "${2:?defunct target required}"
+
+  [ "$1" != window ] && [ "$1" != session ] && {
+    m "ERROR: defunct type arg must be 'window' or 'session'"
+    return 1
+  }
+
+  local s n d
+
+  s=$(d -t "$2" "#{$1_name} #{$1_id}") && {
+    read -r n d <<< "$s"
+
+    # temporarily rename defunct window,
+    # so that we can reuse the name
+    t "rename-$1" -t "$d" "${n}/defunct" && {
+      defuncts="${defuncts:+$defuncts }$d"
+    }
+  }
 }
 
-# Make entire session defuct
-#
-defunct-session() {
-  :
-}
-
-# Kill old unused sessions/windows
+# Kill defunct sessions/windows
 #
 kill-defuncts() {
-  : # TODO
+  local id pid ppid
+
+  local \
+    windows='' \
+    sessions=''
+
+  for id in $defuncts; do
+    [ "${id:0:1}" = '@' ] && {
+      windows="${windows:+$windows }$id"
+    }
+    [ "${id:0:1}" = '$' ] && {
+      sessions="${sessions:+$sessions }$id"
+    }
+  done
+
+  for id in $windows; do
+    e list-panes -t "$id" -F '#D #{pane_pid}' | while read -r pid ppid; do
+      (( ppid > 1 )) && kill -SIGINT "$ppid" &>/dev/null
+      s kill-pane -t "$pid"
+    done
+    s kill-window -t "$id"
+  done
+
+  for id in $sessions; do
+    s kill-session -t "$id"
+  done
+
+  defuncts=
 }
 
 #
@@ -135,7 +177,12 @@ session() {
     m "session named '$session_name' already exists"
 
     (( tokill )) && {
-      defuct-session "=$session_name"
+      defunct session "=$session_name"
+      return
+    }
+
+    session_uuid="$(get session_id "=$session_name:")" || {
+      m "could not get session id (exit $?)"
     }
   }
 }
@@ -175,7 +222,12 @@ window() {
     m "window named '$window_name' already exists"
 
     (( tokill )) && {
-      defuct-window "$session_uuid:=$window_name"
+      defunct window "$session_uuid:=$window_name"
+      return
+    }
+
+    window_uuid="$(get window_id "$session_uuid:=$window_name")" || {
+      m "could not get window id (exit $?)"
     }
   }
 }
