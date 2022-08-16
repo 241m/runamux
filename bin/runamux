@@ -15,15 +15,10 @@ PREFIX=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 readonly PREFIX
 readonly LIBEXEC=${PREFIX}/libexec/runamux
 
-# active session
 session_name=
 session_uuid=
-
-# active window
 window_name=
 window_uuid=
-
-# defunct list
 defuncts=
 
 #
@@ -116,33 +111,68 @@ defunct() {
 #
 kill-defuncts() {
   local id pid ppid
+  local windows sessions
 
-  local \
-    windows='' \
-    sessions=''
+  [ -z "$defuncts" ] && {
+    return
+  }
 
-  for id in $defuncts; do
-    [ "${id:0:1}" = '@' ] && {
-      windows="${windows:+$windows }$id"
-    }
-    [ "${id:0:1}" = '$' ] && {
-      sessions="${sessions:+$sessions }$id"
-    }
+  m "killing defuncts: ${defuncts:-}"
+
+  for id in ${defuncts:-}; do
+    [ "${id:0:1}" = '@' ] && windows="${windows:+$windows }$id"
+    [ "${id:0:1}" = '$' ] && sessions="${sessions:+$sessions }$id"
   done
 
-  for id in $windows; do
+  for id in ${windows:-}; do
     e list-panes -t "$id" -F '#D #{pane_pid}' | while read -r pid ppid; do
+      m "klling pane $pid (PID=$ppid)"
+
+      # unset remain-on-exit and pane-died before killing
+      s set-option -pt "$pid" remain-on-exit off
+      s set-hook -upt "$pid" pane-died
+
+      # kill child process with SIGINT
       (( ppid > 1 )) && kill -SIGINT "$ppid" &>/dev/null
+
+      # close actual pane
       s kill-pane -t "$pid"
     done
+
+    m "klling window $id"
     s kill-window -t "$id"
   done
 
-  for id in $sessions; do
+  for id in ${sessions:-}; do
+    m "klling session $id"
     s kill-session -t "$id"
   done
 
   defuncts=
+}
+
+# Set options for newly created windows/panes
+#
+setup-options() {
+  [ -z "$window_uuid" ] && {
+    # do nothing
+    return
+  }
+
+  local id t="$session_uuid:$window_uuid"
+
+  # set PREFIX env var for libexec scripts
+  t setenv -t "$session_uuid" RUNAMUX_PREFIX "$PREFIX"
+
+  # set remain-on-exit on window so that any panes created that
+  # exited early, will remain for examining
+  t set-option -wt "$t" remain-on-exit on
+
+  # run notify script on pane-died or bell
+  e list-panes -t "$t" -F "#D" | while read -r id; do
+    t set-hook -pt "$id" pane-died "run -b '$LIBEXEC/notify-died $id'"
+    t set-hook -pt "$id" alert-bell "run -b '$LIBEXEC/notify-bell $id'"
+  done
 }
 
 #
@@ -250,7 +280,7 @@ pane() {
     return 1
   }
 
-  trap kill-defuncts RETURN
+  trap 'setup-options; kill-defuncts' RETURN
 
   # active window already created:
   # use 'split-window'
@@ -292,7 +322,6 @@ pane() {
   m "-- command '$*'"
   d=$(e new -ds "$s" -n "$w" -PF "$f" "$@") || {
     m "could not create new session (exit $?)"
-    session_uuid=
     return 1
   }
 
